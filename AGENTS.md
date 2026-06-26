@@ -1,65 +1,105 @@
-# 项目上下文
+# AGENTS.md - LINE 群管理工具
 
-### 版本技术栈
+## 项目概览
+
+LINE 群管理工具 - 一个基于 Next.js 16 的全栈管理后台，用于管理 LINE 群组的自动化运营。
+
+### 核心功能
+- 社群状态变动监听（入群/退群/改名/撤回通知）
+- 高压关键词防御（敏感词检测 → 自动撤回 + 踢人）
+- 自定义时段禁言（定时清理机制）
+- 多代理与多群独立控制（RBAC 权限隔离）
+
+## 技术栈
 
 - **Framework**: Next.js 16 (App Router)
 - **Core**: React 19
 - **Language**: TypeScript 5
-- **UI 组件**: shadcn/ui (基于 Radix UI)
-- **Styling**: Tailwind CSS 4
+- **UI**: shadcn/ui + Tailwind CSS 4
+- **Database**: Supabase (PostgreSQL)
+- **Auth**: JWT (jose) + bcryptjs
 
 ## 目录结构
 
 ```
-├── public/                 # 静态资源
-├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
-├── src/
-│   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+src/
+├── app/
+│   ├── (dashboard)/          # 管理后台页面（需登录）
+│   │   ├── dashboard/        # 仪表盘首页
+│   │   ├── groups/           # 群组列表
+│   │   ├── groups/[id]/      # 群组详情配置
+│   │   ├── admins/           # 管理员管理
+│   │   └── events/           # 事件日志
+│   ├── api/
+│   │   ├── auth/             # 登录/鉴权
+│   │   ├── admins/           # 管理员 CRUD
+│   │   ├── groups/           # 群组 CRUD + 设置/敏感词/白名单
+│   │   ├── events/           # 事件日志查询
+│   │   └── webhook/line/     # LINE Webhook 接收
+│   ├── page.tsx              # 登录页
+│   └── layout.tsx            # 根布局
+├── components/
+│   ├── ui/                   # shadcn/ui 组件
+│   ├── auth-provider.tsx     # 认证上下文
+│   └── layout/               # 布局组件
+├── lib/
+│   ├── auth.ts               # JWT 认证工具
+│   ├── line-api.ts           # LINE Messaging API 客户端
+│   └── db-types.ts           # 数据库类型定义
+└── storage/database/
+    ├── supabase-client.ts    # Supabase 客户端
+    └── shared/schema.ts      # Drizzle Schema
 ```
 
-- 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
+## API 接口清单
 
-## 包管理规范
+| 路径 | 方法 | 说明 |
+|------|------|------|
+| `/api/auth/login` | POST | 管理员登录 |
+| `/api/auth/me` | GET | 获取当前用户信息 |
+| `/api/admins` | GET/POST | 管理员列表/创建 |
+| `/api/admins/[id]` | PUT/DELETE | 管理员更新/删除 |
+| `/api/groups` | GET/POST | 群组列表/创建 |
+| `/api/groups/[id]` | PUT/DELETE | 群组更新/删除 |
+| `/api/groups/[id]/settings` | GET/PUT | 群组设置 |
+| `/api/groups/[id]/sensitive-words` | GET/POST | 敏感词列表/添加 |
+| `/api/groups/[id]/sensitive-words/[wordId]` | DELETE | 删除敏感词 |
+| `/api/groups/[id]/whitelist` | GET/POST | 白名单列表/添加 |
+| `/api/groups/[id]/whitelist/[memberId]` | DELETE | 删除白名单成员 |
+| `/api/events` | GET | 事件日志列表 |
+| `/api/webhook/line` | POST | LINE Webhook |
 
-**仅允许使用 pnpm** 作为包管理器，**严禁使用 npm 或 yarn**。
-**常用命令**：
-- 安装依赖：`pnpm add <package>`
-- 安装开发依赖：`pnpm add -D <package>`
-- 安装所有依赖：`pnpm install`
-- 移除依赖：`pnpm remove <package>`
+## 数据库表
 
-## 开发规范
+- `admins` - 管理员/代理人
+- `line_groups` - LINE 群组
+- `group_settings` - 群组独立配置
+- `sensitive_words` - 敏感词
+- `whitelist_members` - 禁言白名单
+- `message_cache` - 消息缓存（撤回留存）
+- `member_name_cache` - 成员名字缓存（改名检测）
+- `event_logs` - 事件日志
 
-### 编码规范
+## 开发命令
 
-- 默认按 TypeScript `strict` 心智写代码；优先复用当前作用域已声明的变量、函数、类型和导入，禁止引用未声明标识符或拼错变量名。
-- 禁止隐式 `any` 和 `as any`；函数参数、返回值、解构项、事件对象、`catch` 错误在使用前应有明确类型或先完成类型收窄，并清理未使用的变量和导入。
+```bash
+pnpm dev          # 启动开发服务器
+pnpm build        # 构建生产版本
+pnpm start        # 启动生产服务器
+pnpm ts-check     # TypeScript 类型检查
+pnpm lint         # ESLint 检查
+```
 
-### next.config 配置规范
+## 默认账号
 
-- 配置的路径不要写死绝对路径，必须使用 path.resolve(__dirname, ...)、import.meta.dirname 或 process.cwd() 动态拼接。
+- 用户名: `admin`
+- 密码: `admin123`
+- 角色: `super_admin`
 
-### Hydration 问题防范
+## 编码规范
 
-1. 严禁在 JSX 渲染逻辑中直接使用 typeof window、Date.now()、Math.random() 等动态数据。**必须使用 'use client' 并配合 useEffect + useState 确保动态内容仅在客户端挂载后渲染**；同时严禁非法 HTML 嵌套（如 <p> 嵌套 <div>）。
-2. **禁止使用 head 标签**，优先使用 metadata，详见文档：https://nextjs.org/docs/app/api-reference/functions/generate-metadata
-   1. 三方 CSS、字体等资源可在 `globals.css` 中顶部通过 `@import` 引入或使用 next/font
-   2. preload, preconnect, dns-prefetch 通过 ReactDOM 的 preload、preconnect、dns-prefetch 方法引入
-   3. json-ld 可阅读 https://nextjs.org/docs/app/guides/json-ld
-
-## UI 设计与组件规范 (UI & Styling Standards)
-
-- 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
-- Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+- 使用 TypeScript strict 模式
+- 禁止隐式 any
+- 函数参数必须有类型标注
+- 使用 shadcn/ui 组件
+- LINE 品牌色: #06C755
