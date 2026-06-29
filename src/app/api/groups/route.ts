@@ -57,7 +57,16 @@ export async function POST(request: NextRequest) {
       .select('id, line_group_id, group_name, agent_id, is_active, member_count, created_at')
       .single();
 
-    if (error) throw new Error(`创建失败: ${error.message}`);
+    if (error) {
+      // 检测唯一约束冲突
+      if (error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) {
+        return NextResponse.json(
+          { error: `LINE 群 ID「${line_group_id}」已被其他群组使用，请检查是否重复` },
+          { status: 409 }
+        );
+      }
+      throw new Error(`创建失败: ${error.message}`);
+    }
 
     // Auto-create default group settings
     const group = data as Pick<LineGroup, 'id'>;

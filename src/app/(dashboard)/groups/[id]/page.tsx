@@ -62,6 +62,7 @@ export default function GroupDetailPage() {
   const [newWhitelist, setNewWhitelist] = useState({ line_user_id: '', display_name: '' });
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [groupError, setGroupError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [group, setGroup] = useState<{ id: string; group_name: string; line_group_id: string }>({
     id: '',
@@ -126,6 +127,7 @@ export default function GroupDetailPage() {
 
   const handleSaveGroup = async () => {
     setSaving(true);
+    setGroupError('');
     try {
       const res = await fetch(`/api/groups/${groupId}`, {
         method: 'PUT',
@@ -139,8 +141,12 @@ export default function GroupDetailPage() {
       if (result.success) {
         setSaveMessage('基本信息已保存');
         setTimeout(() => setSaveMessage(''), 2000);
+      } else {
+        setGroupError(result.error || '保存失败');
       }
-    } catch { /* empty */ }
+    } catch {
+      setGroupError('网络请求失败');
+    }
     setSaving(false);
   };
 
@@ -247,7 +253,9 @@ export default function GroupDetailPage() {
               />
             </div>
           </div>
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-end items-center gap-3">
+            {groupError && <span className="text-sm text-red-500">{groupError}</span>}
+            {saveMessage && <span className="text-sm text-green-600">{saveMessage}</span>}
             <Button onClick={handleSaveGroup} disabled={saving}>
               {saving ? '保存中...' : '保存基本信息'}
             </Button>

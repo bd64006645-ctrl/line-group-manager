@@ -36,6 +36,7 @@ export default function GroupsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newGroup, setNewGroup] = useState({ line_group_id: '', group_name: '', line_channel_access_token: '', agent_id: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [addError, setAddError] = useState('');
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -70,6 +71,7 @@ export default function GroupsPage() {
   const handleAdd = async () => {
     if (!newGroup.line_group_id || !newGroup.group_name) return;
     setSubmitting(true);
+    setAddError('');
     try {
       const body: Record<string, string> = {
         line_group_id: newGroup.line_group_id,
@@ -84,8 +86,12 @@ export default function GroupsPage() {
         setShowAdd(false);
         setNewGroup({ line_group_id: '', group_name: '', line_channel_access_token: '', agent_id: '' });
         loadGroups();
+      } else {
+        setAddError(data.error || '创建失败，请重试');
       }
-    } catch { /* empty */ }
+    } catch {
+      setAddError('网络请求失败，请重试');
+    }
     setSubmitting(false);
   };
 
@@ -162,6 +168,11 @@ export default function GroupsPage() {
                       <option key={a.id} value={a.id}>{a.display_name}</option>
                     ))}
                   </select>
+                </div>
+              )}
+              {addError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+                  {addError}
                 </div>
               )}
               <Button onClick={handleAdd} className="w-full bg-[#06C755] hover:bg-[#05b04c] text-white" disabled={submitting}>
