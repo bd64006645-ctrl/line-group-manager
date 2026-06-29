@@ -194,18 +194,21 @@ export async function POST(request: NextRequest) {
               const whitelist = (whitelistData || []) as WhitelistMember[];
               if (!isWhitelisted(userId, whitelist)) {
                 // LINE API doesn't support unsending user messages, send warning instead
-                await pushMessage(channelToken, lineGroupId, [{
+                const warnRes = await pushMessage(channelToken, lineGroupId, [{
                   type: 'text',
                   text: `⚠️ 当前为禁言时段（${String(settings.mute_start_hour).padStart(2, '0')}:${String(settings.mute_start_minute).padStart(2, '0')} - ${String(settings.mute_end_hour).padStart(2, '0')}:${String(settings.mute_end_minute).padStart(2, '0')}），请勿发言。`,
                 }]);
+                if (warnRes.error) {
+                  console.error('[Webhook] pushMessage error:', warnRes.error);
+                }
                 await client.from('event_logs').insert({
                   group_id: group.id,
                   event_type: 'mute_block',
                   actor_line_user_id: userId,
-                  content: '禁言时段发言，已发送警告',
+                  content: `禁言时段发言，已发送警告${warnRes.error ? '(发送失败:' + warnRes.error + ')' : ''}`,
                 });
-                await client.from('webhook_logs').update({ status: 'executed', detail: '禁言警告' }).eq('id', logId);
-                results.push({ event: 'mute_block', status: 'executed' });
+                await client.from('webhook_logs').update({ status: 'executed', detail: `禁言警告${warnRes.error ? '(失败:' + warnRes.error + ')' : ''}` }).eq('id', logId);
+                results.push({ event: 'mute_block', status: warnRes.error ? 'error' : 'executed' });
                 break;
               }
             }
