@@ -43,8 +43,9 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { group_name, line_channel_access_token, is_active } = body as {
+    const { group_name, line_group_id, line_channel_access_token, is_active } = body as {
       group_name?: string;
+      line_group_id?: string;
       line_channel_access_token?: string;
       is_active?: boolean;
     };
@@ -65,7 +66,8 @@ export async function PUT(
     }
 
     const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (group_name) updateData.group_name = group_name;
+    if (group_name !== undefined) updateData.group_name = group_name;
+    if (line_group_id !== undefined) updateData.line_group_id = line_group_id;
     if (line_channel_access_token !== undefined) updateData.line_channel_access_token = line_channel_access_token;
     if (is_active !== undefined) updateData.is_active = is_active;
 

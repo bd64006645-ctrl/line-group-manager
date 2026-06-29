@@ -63,6 +63,11 @@ export default function GroupDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [loadingData, setLoadingData] = useState(true);
+  const [group, setGroup] = useState<{ id: string; group_name: string; line_group_id: string }>({
+    id: '',
+    group_name: '',
+    line_group_id: '',
+  });
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -72,16 +77,25 @@ export default function GroupDetailPage() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [settingsRes, wordsRes, whitelistRes] = await Promise.all([
+      const [groupRes, settingsRes, wordsRes, whitelistRes] = await Promise.all([
+        fetch(`/api/groups/${groupId}`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`/api/groups/${groupId}/settings`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`/api/groups/${groupId}/sensitive-words`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`/api/groups/${groupId}/whitelist`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
+      const groupData = await groupRes.json();
       const settingsData = await settingsRes.json();
       const wordsData = await wordsRes.json();
       const whitelistData = await whitelistRes.json();
 
+      if (groupData.success && groupData.data) {
+        setGroup({
+          id: groupData.data.id,
+          group_name: groupData.data.group_name,
+          line_group_id: groupData.data.line_group_id,
+        });
+      }
       if (settingsData.success && settingsData.data) setSettings(settingsData.data);
       if (wordsData.success) setSensitiveWords(wordsData.data || []);
       if (whitelistData.success) setWhitelist(whitelistData.data || []);
@@ -104,6 +118,26 @@ export default function GroupDetailPage() {
       const result = await res.json();
       if (result.success) {
         setSaveMessage('设置已保存');
+        setTimeout(() => setSaveMessage(''), 2000);
+      }
+    } catch { /* empty */ }
+    setSaving(false);
+  };
+
+  const handleSaveGroup = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          group_name: group.group_name,
+          line_group_id: group.line_group_id,
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setSaveMessage('基本信息已保存');
         setTimeout(() => setSaveMessage(''), 2000);
       }
     } catch { /* empty */ }
@@ -183,7 +217,45 @@ export default function GroupDetailPage() {
           <div className="animate-spin w-8 h-8 border-2 border-[#06C755] border-t-transparent rounded-full" />
         </div>
       ) : (
-        <Tabs defaultValue="settings" className="space-y-4">
+        <>
+      {/* Group Basic Info */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">基本信息</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>群组名称</Label>
+              <Input
+                value={group.group_name}
+                onChange={(e) => setGroup({ ...group, group_name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>
+                LINE 群 ID
+                <span className="text-xs text-muted-foreground ml-2">
+                  (从 Webhook 调试页面获取真实群 ID)
+                </span>
+              </Label>
+              <Input
+                value={group.line_group_id}
+                onChange={(e) => setGroup({ ...group, line_group_id: e.target.value })}
+                placeholder="C1a2b3c4d5e6f7890abcdef..."
+                className="font-mono text-sm"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={handleSaveGroup} disabled={saving}>
+              {saving ? '保存中...' : '保存基本信息'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="settings" className="space-y-4">
           <TabsList>
             <TabsTrigger value="settings">通知与禁言</TabsTrigger>
             <TabsTrigger value="keywords">敏感词 ({sensitiveWords.length})</TabsTrigger>
@@ -388,6 +460,7 @@ export default function GroupDetailPage() {
             </Card>
           </TabsContent>
         </Tabs>
+      </>
       )}
     </div>
   );

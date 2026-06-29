@@ -11,6 +11,7 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  Bug,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/groups', label: '群组管理', icon: MessageSquare },
   { href: '/admins', label: '代理管理', icon: Shield },
   { href: '/events', label: '事件日志', icon: ScrollText },
+  { href: '/webhook-debug', label: 'Webhook 调试', icon: Bug },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

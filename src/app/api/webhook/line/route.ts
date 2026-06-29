@@ -65,6 +65,15 @@ export async function POST(request: NextRequest) {
     const results: Array<{ event: string; status: string; detail?: string }> = [];
 
     for (const event of events) {
+      // Log ALL incoming events for debugging
+      await client.from('webhook_logs').insert({
+        event_type: event.type,
+        group_id: event.source.groupId || null,
+        user_id: event.source.userId || null,
+        raw_payload: event as unknown as Record<string, unknown>,
+        status: 'received',
+      });
+
       if (event.source.type !== 'group' || !event.source.groupId) {
         results.push({ event: event.type, status: 'skipped', detail: 'Not a group event' });
         continue;
@@ -81,7 +90,13 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (!groupData) {
-        results.push({ event: event.type, status: 'skipped', detail: 'Group not registered' });
+        // Update webhook log with "group not found" status
+        await client.from('webhook_logs')
+          .update({ status: 'skipped', detail: `Group not registered. LINE Group ID: ${lineGroupId}` })
+          .eq('event_type', event.type)
+          .eq('group_id', lineGroupId)
+          .eq('status', 'received');
+        results.push({ event: event.type, status: 'skipped', detail: `Group not registered. LINE Group ID: ${lineGroupId}` });
         continue;
       }
 
@@ -89,6 +104,11 @@ export async function POST(request: NextRequest) {
       const channelToken = group.line_channel_access_token || process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 
       if (!channelToken) {
+        await client.from('webhook_logs')
+          .update({ status: 'error', detail: 'No channel access token configured' })
+          .eq('event_type', event.type)
+          .eq('group_id', lineGroupId)
+          .eq('status', 'received');
         results.push({ event: event.type, status: 'error', detail: 'No channel access token' });
         continue;
       }
