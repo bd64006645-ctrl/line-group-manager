@@ -61,6 +61,7 @@ export default function GroupDetailPage() {
   const [newWord, setNewWord] = useState('');
   const [newWhitelist, setNewWhitelist] = useState({ line_user_id: '', display_name: '' });
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const [loadingData, setLoadingData] = useState(true);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -95,11 +96,16 @@ export default function GroupDetailPage() {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      await fetch(`/api/groups/${groupId}/settings`, {
+      const res = await fetch(`/api/groups/${groupId}/settings`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(settings),
       });
+      const result = await res.json();
+      if (result.success) {
+        setSaveMessage('设置已保存');
+        setTimeout(() => setSaveMessage(''), 2000);
+      }
     } catch { /* empty */ }
     setSaving(false);
   };
@@ -210,10 +216,10 @@ export default function GroupDetailPage() {
 
                 <div className="border-t pt-6">
                   <h3 className="text-base font-semibold mb-4">关键词防御</h3>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-[#F8F9FA]">
+                  <div className={`flex items-center justify-between p-3 rounded-lg border-2 ${settings.keyword_defense_enabled ? 'border-[#E17055] bg-[#E17055]/5' : 'bg-[#F8F9FA] border-transparent'}`}>
                     <div>
-                      <Label className="text-sm">启用关键词防御</Label>
-                      <p className="text-xs text-[#636E72] mt-1">检测到敏感词时自动撤回消息并踢出成员</p>
+                      <Label className="text-sm font-medium">启用关键词防御</Label>
+                      <p className="text-xs text-[#636E72] mt-1">开启后，检测到敏感词时自动撤回消息并踢出成员。需在下方「敏感词」标签页添加敏感词。</p>
                     </div>
                     <Switch
                       checked={settings.keyword_defense_enabled}
@@ -224,10 +230,10 @@ export default function GroupDetailPage() {
 
                 <div className="border-t pt-6">
                   <h3 className="text-base font-semibold mb-4">定时禁言</h3>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-[#F8F9FA] mb-4">
+                  <div className={`flex items-center justify-between p-3 rounded-lg border-2 mb-4 ${settings.mute_enabled ? 'border-[#FDCB6E] bg-[#FDCB6E]/5' : 'bg-[#F8F9FA] border-transparent'}`}>
                     <div>
-                      <Label className="text-sm">启用禁言</Label>
-                      <p className="text-xs text-[#636E72] mt-1">禁言时段内非白名单成员发言将被自动撤回</p>
+                      <Label className="text-sm font-medium">启用禁言</Label>
+                      <p className="text-xs text-[#636E72] mt-1">禁言时段内非白名单成员发言将被自动撤回（仅撤回，不踢人）</p>
                     </div>
                     <Switch
                       checked={settings.mute_enabled}
@@ -281,10 +287,13 @@ export default function GroupDetailPage() {
                   )}
                 </div>
 
-                <Button onClick={handleSaveSettings} className="bg-[#06C755] hover:bg-[#05b04c] text-white" disabled={saving}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                  保存设置
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleSaveSettings} className="bg-[#06C755] hover:bg-[#05b04c] text-white" disabled={saving}>
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    保存设置
+                  </Button>
+                  {saveMessage && <span className="text-sm text-[#06C755] font-medium">{saveMessage}</span>}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

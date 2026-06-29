@@ -32,7 +32,26 @@ export async function GET(
       .maybeSingle();
 
     if (error) throw new Error(`查询失败: ${error.message}`);
-    return NextResponse.json({ success: true, data });
+
+    // Return defaults if no settings record exists yet
+    const settings = data || {
+      id: '',
+      group_id: id,
+      notify_join_enabled: true,
+      notify_leave_enabled: true,
+      notify_rename_enabled: true,
+      notify_unsend_enabled: true,
+      mute_enabled: false,
+      mute_start_hour: 20,
+      mute_start_minute: 0,
+      mute_end_hour: 8,
+      mute_end_minute: 0,
+      keyword_defense_enabled: false,
+      created_at: new Date().toISOString(),
+      updated_at: null,
+    };
+
+    return NextResponse.json({ success: true, data: settings });
   } catch (e) {
     const message = e instanceof Error ? e.message : '查询失败';
     return NextResponse.json({ error: message }, { status: 500 });
