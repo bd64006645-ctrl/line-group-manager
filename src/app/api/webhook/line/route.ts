@@ -66,13 +66,14 @@ export async function POST(request: NextRequest) {
 
     for (const event of events) {
       // Log ALL incoming events for debugging
-      await client.from('webhook_logs').insert({
+      const { data: logData } = await client.from('webhook_logs').insert({
         event_type: event.type,
         group_id: event.source.groupId || null,
         user_id: event.source.userId || null,
         raw_payload: event as unknown as Record<string, unknown>,
         status: 'received',
-      });
+      }).select('id').single();
+      const logId = logData?.id;
 
       if (event.source.type !== 'group' || !event.source.groupId) {
         results.push({ event: event.type, status: 'skipped', detail: 'Not a group event' });
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      try {
       // Get group settings
       const { data: settingsData } = await client
         .from('group_settings')
@@ -160,19 +162,23 @@ export async function POST(request: NextRequest) {
               const matched = containsSensitiveWord(event.message.text, sensitiveWords);
 
               if (matched) {
-                // Unsend the message
-                await unsendMessage(channelToken, messageId);
-                // Kick the member
+                // Kick the member (LINE API doesn't support unsending user messages)
                 if (userId) {
                   await kickMember(channelToken, lineGroupId, userId);
                 }
+                // Send warning message to group
+                await pushMessage(channelToken, lineGroupId, [{
+                  type: 'text',
+                  text: `⚠️ 关键词防御：成员发言包含敏感词「${matched.word}」，已被移出群组。`,
+                }]);
                 // Log the event
                 await client.from('event_logs').insert({
                   group_id: group.id,
                   event_type: 'keyword_block',
                   actor_line_user_id: userId,
-                  content: `敏感词「${matched.word}」触发，消息已撤回，成员已踢出`,
+                  content: `敏感词「${matched.word}」触发，成员已踢出`,
                 });
+                await client.from('webhook_logs').update({ status: 'executed', detail: `关键词防御: ${matched.word}` }).eq('id', logId);
                 results.push({ event: 'keyword_block', status: 'executed', detail: `Word: ${matched.word}` });
                 break;
               }
@@ -187,13 +193,18 @@ export async function POST(request: NextRequest) {
 
               const whitelist = (whitelistData || []) as WhitelistMember[];
               if (!isWhitelisted(userId, whitelist)) {
-                await unsendMessage(channelToken, messageId);
+                // LINE API doesn't support unsending user messages, send warning instead
+                await pushMessage(channelToken, lineGroupId, [{
+                  type: 'text',
+                  text: `⚠️ 当前为禁言时段（${String(settings.mute_start_hour).padStart(2, '0')}:${String(settings.mute_start_minute).padStart(2, '0')} - ${String(settings.mute_end_hour).padStart(2, '0')}:${String(settings.mute_end_minute).padStart(2, '0')}），请勿发言。`,
+                }]);
                 await client.from('event_logs').insert({
                   group_id: group.id,
                   event_type: 'mute_block',
                   actor_line_user_id: userId,
-                  content: '禁言时段发言，消息已撤回',
+                  content: '禁言时段发言，已发送警告',
                 });
+                await client.from('webhook_logs').update({ status: 'executed', detail: '禁言警告' }).eq('id', logId);
                 results.push({ event: 'mute_block', status: 'executed' });
                 break;
               }
@@ -281,6 +292,23 @@ export async function POST(request: NextRequest) {
         default:
           results.push({ event: event.type, status: 'ignored' });
           break;
+      }
+
+      // Update webhook log status to executed
+      await client.from('webhook_logs')
+        .update({ status: 'executed', detail: results[results.length - 1]?.detail || 'Processed' })
+        .eq('event_type', event.type)
+        .eq('group_id', lineGroupId)
+        .eq('status', 'received');
+
+      } catch (processError) {
+        const errorMsg = processError instanceof Error ? processError.message : 'Unknown error';
+        await client.from('webhook_logs')
+          .update({ status: 'error', detail: errorMsg })
+          .eq('event_type', event.type)
+          .eq('group_id', lineGroupId)
+          .eq('status', 'received');
+        results.push({ event: event.type, status: 'error', detail: errorMsg });
       }
     }
 
