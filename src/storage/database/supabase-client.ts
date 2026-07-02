@@ -5,18 +5,12 @@ interface SupabaseCredentials {
   anonKey: string;
 }
 
+// Supabase URL and Anon Key are public and safe to expose
+const SUPABASE_URL = 'https://br-neat-sora-52a371f1.supabase2.aidap-global.cn-beijing.volces.com';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjMzNjI5NjE5NjQsInJvbGUiOiJhbm9uIn0.KsQd9MQhjfXVDmK3kg7UcHlgh260cvrBx0AjEJ0ngmc';
+
 function getSupabaseCredentials(): SupabaseCredentials {
-  const url = process.env.COZE_SUPABASE_URL;
-  const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
-
-  if (!url) {
-    throw new Error('COZE_SUPABASE_URL is not set. Please check your Vercel environment variables.');
-  }
-  if (!anonKey) {
-    throw new Error('COZE_SUPABASE_ANON_KEY is not set. Please check your Vercel environment variables.');
-  }
-
-  return { url, anonKey };
+  return { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
 }
 
 function getSupabaseServiceRoleKey(): string | undefined {
