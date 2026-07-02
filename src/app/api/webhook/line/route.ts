@@ -135,6 +135,15 @@ export async function POST(request: NextRequest) {
         keyword_defense_enabled: false,
       }) as GroupSettings;
 
+      // Debug log for settings
+      console.log('[Webhook] Group settings loaded:', {
+        groupId: group.id,
+        mute_enabled: settings.mute_enabled,
+        mute_start: `${settings.mute_start_hour}:${settings.mute_start_minute}`,
+        mute_end: `${settings.mute_end_hour}:${settings.mute_end_minute}`,
+        keyword_defense_enabled: settings.keyword_defense_enabled,
+      });
+
       // Handle different event types
       switch (event.type) {
         case 'message': {
@@ -163,29 +172,45 @@ export async function POST(request: NextRequest) {
 
               if (matched) {
                 // Kick the member (LINE API doesn't support unsending user messages)
+                let kickSuccess = false;
                 if (userId) {
-                  await kickMember(channelToken, lineGroupId, userId);
+                  const kickResult = await kickMember(channelToken, lineGroupId, userId);
+                  kickSuccess = !kickResult.error;
+                  if (kickResult.error) {
+                    console.error('[Webhook] Kick member failed:', kickResult.error);
+                    await client.from('webhook_logs').update({ 
+                      status: 'error', 
+                      detail: `关键词防御踢人失败: ${kickResult.error}` 
+                    }).eq('id', logId);
+                  }
                 }
-                // Send warning message to group
-                await pushMessage(channelToken, lineGroupId, [{
-                  type: 'text',
-                  text: `⚠️ 关键词防御：成员发言包含敏感词「${matched.word}」，已被移出群组。`,
-                }]);
-                // Log the event
-                await client.from('event_logs').insert({
-                  group_id: group.id,
-                  event_type: 'keyword_block',
-                  actor_line_user_id: userId,
-                  content: `敏感词「${matched.word}」触发，成员已踢出`,
-                });
-                await client.from('webhook_logs').update({ status: 'executed', detail: `关键词防御: ${matched.word}` }).eq('id', logId);
-                results.push({ event: 'keyword_block', status: 'executed', detail: `Word: ${matched.word}` });
+                
+                // Only send warning message if kick succeeded
+                if (kickSuccess) {
+                  await pushMessage(channelToken, lineGroupId, [{
+                    type: 'text',
+                    text: `⚠️ 关键词防御：成员发言包含敏感词「${matched.word}」，已被移出群组。`,
+                  }]);
+                  // Log the event
+                  await client.from('event_logs').insert({
+                    group_id: group.id,
+                    event_type: 'keyword_block',
+                    actor_line_user_id: userId,
+                    content: `敏感词「${matched.word}」触发，成员已踢出`,
+                  });
+                  await client.from('webhook_logs').update({ status: 'executed', detail: `关键词防御: ${matched.word}` }).eq('id', logId);
+                  results.push({ event: 'keyword_block', status: 'executed', detail: `Word: ${matched.word}` });
+                } else {
+                  results.push({ event: 'keyword_block', status: 'error', detail: `踢人失败: ${matched.word}` });
+                }
                 break;
               }
             }
 
             // Mute time check
-            if (isMuteTime(settings)) {
+            const muteCheck = isMuteTime(settings);
+            console.log('[Webhook] Mute check:', { muteCheck, mute_enabled: settings.mute_enabled, startHour: settings.mute_start_hour, endHour: settings.mute_end_hour, currentHour: new Date().getHours() });
+            if (muteCheck) {
               const { data: whitelistData } = await client
                 .from('whitelist_members')
                 .select('line_user_id')
